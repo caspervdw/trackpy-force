@@ -1,10 +1,11 @@
 import numpy as np
 from scipy.stats import norm as normal_distribution
 import unittest
-from displcode.drift_diffusion import Diffusion1D, ConstantDrift1D, \
-    _Piecewise1D, PiecewiseForce1D, PiecewiseForce2DGrid, PiecewiseEnergy2DGrid, \
-    _Piecewise2D
+from tpforce.maxlikelihood import Diffusion1D, ConstantDrift1D, \
+    Piecewise1D, PiecewiseForce1D, PiecewiseForce2DGrid, PiecewiseEnergy2DGrid, \
+    Piecewise2D
 from numpy.testing import assert_allclose
+
 
 def simulate_1D(f_func, n_particles, n_steps, D, dt, dt_sim, force=0., kT=1.):
     # this simulation is valid when F and D are constant locally
@@ -81,7 +82,7 @@ class TestInterp(unittest.TestCase):
         func = lambda x: 3*x**2 + 2*x - 5
         y0 = func(x0)
         x1 = np.random.random(N) * 10
-        y1 = _Piecewise1D(x0, x1)(y0)
+        y1 = Piecewise1D(x0, x1)(y0)
 
         assert_allclose(y1, func(x1), rtol=0.1)
 
@@ -97,7 +98,7 @@ class TestInterp(unittest.TestCase):
         z_grid = func(x_grid, y_grid)
 
         y1, x1 = np.random.random((2, N)) * 10 - 5
-        z1 = _Piecewise2D(y_vect, x_vect, y1, x1)(z_grid)
+        z1 = Piecewise2D(y_vect, x_vect, y1, x1)(z_grid)
 
         assert_allclose(z1, func(x1, y1), atol=0.1)
 
@@ -162,7 +163,7 @@ class TestDriftDiffusion1D(unittest.TestCase):
         force = 1.4
 
         x = simulate_1D(lambda x: np.zeros_like(x), N, 2, D=D,
-                        tau=1, dt_sim=1, force=force)
+                        dt=1, dt_sim=1, force=force)
         model = ConstantDrift1D(x[:-1].ravel(), x[1:].ravel())
 
         Fs, Ds = model.fit()
@@ -211,50 +212,50 @@ class TestPiecewise1D(unittest.TestCase):
         Fs = model.fit()
         assert_allclose(Fs, f_func(force_x), atol=0.1)
 
-
-class TestPiecewise2D(unittest.TestCase):
-    def test_force(self):
-        N = 100000
-        D = 0.5
-        f_func = lambda r: (4 * r ** 3 - 40 * r) / -50  # kT / um
-        force_x = np.linspace(-5, 5, 10)
-
-        x, y = simulate_2D_radial(f_func, N, 2, D=D, dt=1, dt_sim=1)
-        xy = np.array([x, y]).transpose(0, 2, 1)
-        model = PiecewiseForce2DGrid(xy[0], xy[1], grid_x0=force_x,
-                                     grid_x1=force_x, D=D)
-
-        Fs = model.fit()
-
-        x_result, y_result = np.meshgrid(force_x, force_x, indexing='ij')
-        r_result = np.sqrt(x_result**2 + y_result**2)
-        f_r = f_func(r_result)
-        f_x = x_result / r_result * f_r
-        f_y = y_result / r_result * f_r
-        assert_allclose(Fs[:, :, 0], f_x, atol=0.1)
-        assert_allclose(Fs[:, :, 1].reshape(10, 10), f_y, atol=0.1)
-
-    def test_energy(self):
-        N = 100000
-        D = 0.5
-        f_func = lambda r: (4 * r ** 3 - 40 * r) / -50  # kT / um
-        u_func = lambda r: (r ** 4 - 20 * r ** 2) / 50  # kT
-        u_x = np.linspace(-3, 3, 20)
-
-        y, x = simulate_2D_radial(f_func, 2*N, 2, D=D, dt=1, dt_sim=1,
-                                  initial_radius=3 * np.sqrt(2))
-
-        yx = np.array([y, x]).transpose((1, 2, 0))
-        mask = np.all(np.abs(yx[0, :]) < 3, axis=1)
-        yx = yx[:, mask][:, :N]
-
-        model = PiecewiseEnergy2DGrid(yx[0], yx[1], grid_x0=u_x,
-                                      grid_x1=u_x, D=D)
-        Us = model.fit()
-
-        y_result, x_result = np.meshgrid(u_x, u_x, indexing='ij')
-        r_result = np.sqrt(x_result**2 + y_result**2)
-        u = u_func(r_result)
-
-        Us += np.mean(u - Us)
-        assert_allclose(Us, u, atol=0.2)
+#
+# class TestPiecewise2D(unittest.TestCase):
+#     def test_force(self):
+#         N = 100000
+#         D = 0.5
+#         f_func = lambda r: (4 * r ** 3 - 40 * r) / -50  # kT / um
+#         force_x = np.linspace(-5, 5, 10)
+#
+#         x, y = simulate_2D_radial(f_func, N, 2, D=D, dt=1, dt_sim=1)
+#         xy = np.array([x, y]).transpose(0, 2, 1)
+#         model = PiecewiseForce2DGrid(xy[0], xy[1], grid_x0=force_x,
+#                                      grid_x1=force_x, D=D)
+#
+#         Fs = model.fit()
+#
+#         x_result, y_result = np.meshgrid(force_x, force_x, indexing='ij')
+#         r_result = np.sqrt(x_result**2 + y_result**2)
+#         f_r = f_func(r_result)
+#         f_x = x_result / r_result * f_r
+#         f_y = y_result / r_result * f_r
+#         assert_allclose(Fs[:, :, 0], f_x, atol=0.1)
+#         assert_allclose(Fs[:, :, 1].reshape(10, 10), f_y, atol=0.1)
+#
+#     def test_energy(self):
+#         N = 100000
+#         D = 0.5
+#         f_func = lambda r: (4 * r ** 3 - 40 * r) / -50  # kT / um
+#         u_func = lambda r: (r ** 4 - 20 * r ** 2) / 50  # kT
+#         u_x = np.linspace(-3, 3, 20)
+#
+#         y, x = simulate_2D_radial(f_func, 2*N, 2, D=D, dt=1, dt_sim=1,
+#                                   initial_radius=3 * np.sqrt(2))
+#
+#         yx = np.array([y, x]).transpose((1, 2, 0))
+#         mask = np.all(np.abs(yx[0, :]) < 3, axis=1)
+#         yx = yx[:, mask][:, :N]
+#
+#         model = PiecewiseEnergy2DGrid(yx[0], yx[1], grid_x0=u_x,
+#                                       grid_x1=u_x, D=D)
+#         Us = model.fit()
+#
+#         y_result, x_result = np.meshgrid(u_x, u_x, indexing='ij')
+#         r_result = np.sqrt(x_result**2 + y_result**2)
+#         u = u_func(r_result)
+#
+#         Us += np.mean(u - Us)
+#         assert_allclose(Us, u, atol=0.2)

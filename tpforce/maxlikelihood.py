@@ -7,6 +7,7 @@ from six import with_metaclass
 from abc import ABCMeta, abstractmethod, abstractproperty
 from scipy.optimize import minimize
 from scipy.integrate import cumtrapz
+from scipy.interpolate import RectBivariateSpline
 
 
 class DriftDiffusionBase(with_metaclass(ABCMeta, object)):
@@ -296,7 +297,7 @@ class ConstantDrift1D(DriftDiffusionBase):
         return p[0] * Dt / self.kT, Dt
 
 
-class _Piecewise1D(object):
+class Piecewise1D(object):
     """Fast piecewise linear interpolation in one dimension.
 
     Optimized for the special case that the interpolation is done many
@@ -330,7 +331,7 @@ class _Piecewise1D(object):
         return a.take(self.index) * x_interp + b.take(self.index)
 
 
-class _Piecewise2D(object):
+class Piecewise2D(object):
     def __init__(self, y_grid, x_grid, y_interp, x_interp):
         if not np.all(x_grid[1:] > x_grid[:-1]):
             raise ValueError("x_grid must be sorted in ascending order")
@@ -377,7 +378,7 @@ class PiecewiseForce1D(DriftDiffusionBase):
     def initialize(self, force_x, D=None):
         self.D = D
         self.force_x = np.sort(force_x)
-        self.force = _Piecewise1D(self.force_x, self.measurements[0])
+        self.force = Piecewise1D(self.force_x, self.measurements[0])
 
     @property
     def n_params(self):
@@ -418,8 +419,6 @@ class PiecewiseForce1D(DriftDiffusionBase):
         force = self.force(F) * Dt / self.kT
         return force, Dt  # force, diffusion coefficient
 
-
-from scipy.interpolate import RectBivariateSpline
 
 class PiecewiseForce2DGrid(DriftDiffusionBase):
     def initialize(self, grid_x0, grid_x1, D):
@@ -476,9 +475,9 @@ class PiecewiseEnergy2DGrid(DriftDiffusionBase):
         else:
             self.dx1 = dx1
 
-        self.interpolator = _Piecewise2D(grid_x0, grid_x1,
-                                         self.measurements[0][:, 0],
-                                         self.measurements[0][:, 1])
+        self.interpolator = Piecewise2D(grid_x0, grid_x1,
+                                        self.measurements[0][:, 0],
+                                        self.measurements[0][:, 1])
 
     @property
     def n_params(self):
