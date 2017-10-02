@@ -10,7 +10,19 @@ from scipy.integrate import cumtrapz
 from scipy.interpolate import RectBivariateSpline
 
 
-class DriftDiffusionBase(with_metaclass(ABCMeta, object)):
+def _check_displ_data(x_t0, x_t1):
+    x_t0 = np.array(x_t0)
+    x_t1 = np.array(x_t1)
+    if x_t0.ndim == 1:
+        x_t0 = x_t0[:, np.newaxis]
+    if x_t1.ndim == 1:
+        x_t1 = x_t1[:, np.newaxis]
+    assert x_t0.shape[0] == x_t1.shape[0]
+    assert x_t0.shape[1] == x_t1.shape[1]
+    return x_t0.copy(), x_t1.copy()
+
+
+class MLEBase(with_metaclass(ABCMeta, object)):
     """Basemodel to fit Brownian motion in a potential field.
 
     The Smoluchowski equation is a stochastic partial differential
@@ -24,7 +36,7 @@ class DriftDiffusionBase(with_metaclass(ABCMeta, object)):
     F and D, as well as a simple Bayesian method to sample the credibility
     intervals.
 
-    We use `x` to denote the (N-dimensional) coordinate of an observation. The
+    We use `x` to denote the (M-dimensional) coordinate of an observation. The
     corresponding coordinate system can be anything: Euclidean (x, y) position,
     an angle, a distance between two particles, or the simultaneous positions
     of 6 particles.
@@ -56,22 +68,16 @@ class DriftDiffusionBase(with_metaclass(ABCMeta, object)):
     """
 
     def __init__(self, x_t0, x_t1, tau=1., kT=1., **kwargs):
-        if x_t0.ndim == 1:
-            x_t0 = x_t0[:, np.newaxis]
-        if x_t1.ndim == 1:
-            x_t1 = x_t1[:, np.newaxis]
-        assert x_t0.shape[0] == x_t1.shape[0]
-        assert x_t0.shape[1] == x_t1.shape[1]
-        self.measurements = (x_t0.copy(), x_t1.copy())
+        self.measurements = _check_displ_data(x_t0, x_t1)
         self.tau = tau
         self.kT = kT
 
         # possibly x_t0 and x_t1 are adapted in initialize
         self.initialize(**kwargs)
 
-        x_t0, x_t1 = self.measurements
-        self.N, self.M = x_t0.shape
-        self.dx = x_t1 - x_t0
+        self.measurements = _check_displ_data(*self.measurements)
+        self.N, self.M = self.measurements[0].shape
+        self.dx = self.measurements[1] - self.measurements[0]
 
     def initialize(self, *args, **kwargs):
         return
@@ -169,8 +175,8 @@ class DriftDiffusionBase(with_metaclass(ABCMeta, object)):
             self.traces = self._traces
 
         try:
-            mu = np.mean(self.traces, axis=0)
-            sigma = np.std(self.traces, axis=0)
+            mu = np.mean(self.traces, axis=1)
+            sigma = np.std(self.traces, axis=1)
             return mu, sigma
         except:
             return self.traces
@@ -249,7 +255,7 @@ def integrate_traces(x, y, reference=None):
     return mu, sigma
 
 
-class Diffusion1D(DriftDiffusionBase):
+class Diffusion1D(MLEBase):
     @property
     def model_bounds(self):
         return [[1e-7, np.inf]]
@@ -272,7 +278,7 @@ class Diffusion1D(DriftDiffusionBase):
             return 0.
 
 
-class ConstantDrift1D(DriftDiffusionBase):
+class ConstantDrift1D(MLEBase):
     @property
     def model_bounds(self):
         return [[-np.inf, np.inf], [1e-7, np.inf]]
@@ -374,7 +380,7 @@ class Piecewise2D(object):
         return result
 
 
-class PiecewiseForce1D(DriftDiffusionBase):
+class PiecewiseForce1D(MLEBase):
     def initialize(self, force_x, D=None):
         self.D = D
         self.force_x = np.sort(force_x)
@@ -420,7 +426,7 @@ class PiecewiseForce1D(DriftDiffusionBase):
         return force, Dt  # force, diffusion coefficient
 
 
-class PiecewiseForce2DGrid(DriftDiffusionBase):
+class PiecewiseForce2DGrid(MLEBase):
     def initialize(self, grid_x0, grid_x1, D):
         self.D = D
         self.grid_x0 = grid_x0
@@ -458,7 +464,7 @@ class PiecewiseForce2DGrid(DriftDiffusionBase):
         return force * (self.D * self.tau / self.kT), self.D * self.tau
 
 
-class PiecewiseEnergy2DGrid(DriftDiffusionBase):
+class PiecewiseEnergy2DGrid(MLEBase):
     def initialize(self, grid_x0, grid_x1, D):
         self.D = D
         self.grid_x0 = grid_x0

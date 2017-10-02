@@ -4,23 +4,7 @@ import six
 import numpy as np
 
 
-def _norm_trans(arclen, trans):
-    return trans * arclen[:, np.newaxis] / arclen[np.newaxis, :]
-
-
-def norm_2d(s, trans):
-    return _norm_trans(s, trans)
-
-
-def norm_3d(s, trans):
-    return _norm_trans(s**2, trans)
-
-
-def norm_sphere(s, trans, R):
-    return _norm_trans(np.sin(s / R), trans)
-
-
-def transition_matrix(s0, s1, bins, transform=None, **kwargs):
+def transition_matrix(s0, s1, bins, jacobian=None, **kwargs):
     """Calculates the transition probability matrix given pairs of distances.
 
     Parameters
@@ -31,8 +15,18 @@ def transition_matrix(s0, s1, bins, transform=None, **kwargs):
         1d array containing final distances
     bins : ndarray
         the binedges that discretizing the distances
-    transform : {None | 'radial_2d' | 'radial_3d' | 'sphere'}
-        defines the geometry
+    jacobian : {None | callable | 'radial_2d' | 'radial_3d' | 'sphere'}
+        Used to calculate the weights in the transition matrix, necessary in
+        geometries that are not flat 1D (so almost always).
+
+        It is the Jacobian belonging to the coordinate transformation from
+        Cartesion coordinates:
+
+        J(x', y') = abs(det(dxdy/dx'dy') evaluated at x', y'
+
+        For example for 2D polar coordaintes (r, theta): J = r
+        For 3D polar: J = r^2.
+        For coordinates on a sphere of radius R: J = np.sin(r / R)
     radius : float
         required only if the geometry is 'sphere'
 
@@ -47,8 +41,8 @@ def transition_matrix(s0, s1, bins, transform=None, **kwargs):
                'radial_3d': lambda x: x ** 2,
                'sphere': lambda x: np.sin(x / kwargs['radius'])}
 
-    if transform is not None and transform not in tr_dict:
-        raise KeyError('Unknown norm')
+    if jacobian is not None and not callable(jacobian):
+        jacobian = tr_dict[jacobian]
 
     # copy and filter the coordinates
     mask = (s0 >= bins[0]) & (s0 < bins[-1])
@@ -65,21 +59,10 @@ def transition_matrix(s0, s1, bins, transform=None, **kwargs):
     trans_count = np.histogram2d(s0, s1_mirror, bins=[bins, bins])[0]
     count_s0 = trans_count.sum(axis=1)
 
-    if transform is None:
+    if jacobian is None:
         trans = trans_count
     else:
-        # calculate the weights in the transition matrix
-        # this equals arclen(s0) / arclen(s1)
-        # with arclen the length of equidistant circle with length s
         # TODO: what if geometry varies spatially so that arclen depends on pos?
-
-        # more technically, for a coordinate transformation Cartesian -> Polar:
-        # weight = J_0 / J_1
-        # with J_n abs(det(Jacobian(dxdy/drdth)) evaluated at s_n
-        # for 2D polar: J = s.   for 3D polar, J = s^2.
-        # for curved, spherical: J = np.sin(s / radius)
-
-        jacobian = tr_dict[transform]
         weights = jacobian(s0) / jacobian(s1_mirror)
         trans = np.histogram2d(s0, s1_mirror, bins=[bins, bins],
                                weights=weights)[0]
