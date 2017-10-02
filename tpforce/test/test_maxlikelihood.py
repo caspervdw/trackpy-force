@@ -121,10 +121,10 @@ class TestDiffusion1D(unittest.TestCase):
 
         x = simulate_1D(lambda x: np.zeros_like(x), N, 2, D=D,
                         dt=0.1, dt_sim=0.1)
-        model = Diffusion1D(x[:-1].ravel(), x[1:].ravel(), dt=0.1)
+        model = Diffusion1D(x[:-1].ravel(), x[1:].ravel(), tau=0.1)
         actual = model.fit()[0]
 
-        assert_allclose(actual, D, rtol=0.05)
+        assert_allclose(actual, D, rtol=0.1)
 
     def test_err(self):
         M = 10
@@ -134,14 +134,22 @@ class TestDiffusion1D(unittest.TestCase):
                         dt=1, dt_sim=1)
         x0 = x[:-1].ravel()
         x1 = x[1:].ravel()
-        for sqrtN in np.linspace(np.sqrt(40), np.sqrt(N), M):
+
+        sqrtNs = np.linspace(np.sqrt(200), np.sqrt(N), M)
+        sigmas = []
+        for sqrtN in sqrtNs:
             N = int(sqrtN**2)
             model = Diffusion1D(x0[:N], x1[:N])
             mu, sigma = model.sample_bayesian(p0=[D], nburn=0, nwalkers=10,
                                               nsteps=500, est_alpha=1e-7)
+            sigmas.append(sigma[0])
 
-            expected_sigma = mu/np.sqrt(0.5*N)  # why the half?
-            assert_allclose(sigma, expected_sigma, rtol=0.2, atol=0.001)
+            # check if it is within 3 sigma
+            assert_allclose(mu[0], 0.5, atol=sigma[0]*3)
+
+        sigmas = np.array(sigmas)
+        a, b = np.polyfit(1/sqrtNs, sigmas, deg=1)
+        assert_allclose(sigmas, a /sqrtNs, rtol=0.25)
 
 
 class TestDriftDiffusion1D(unittest.TestCase):
@@ -210,7 +218,7 @@ class TestPiecewise1D(unittest.TestCase):
                                  force_x=force_x, D=D)
 
         Fs = model.fit()
-        assert_allclose(Fs, f_func(force_x), atol=0.1)
+        assert_allclose(Fs, f_func(force_x), atol=0.2)
 
 #
 # class TestPiecewise2D(unittest.TestCase):

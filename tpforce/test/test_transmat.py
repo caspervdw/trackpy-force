@@ -51,13 +51,17 @@ class TestTransitionMatrix(unittest.TestCase):
 
     def test_trans_mat_many(self):
         pairs, _ = extract_pairs(self.rw.f(), 10, 0.5)
-        bins, mat, counts = transition_matrix(pairs, 0, 10, 0.1)
+        bins, mat, counts = transition_matrix(s0=pairs['s0'].values,
+                                              s1=pairs['s1'].values,
+                                              bins=np.arange(0, 10, 0.1))
         assert_almost_equal(mat.sum(1), 1.)
         assert mat.shape[0] == mat.shape[1]
 
     def test_trans_mat_few(self):
         pairs, _ = extract_pairs(self.rw.f(), 10, 1)
-        bins, mat, counts = transition_matrix(pairs, 0, 10, 0.1)
+        bins, mat, counts = transition_matrix(s0=pairs['s0'].values,
+                                              s1=pairs['s1'].values,
+                                              bins=np.arange(0, 10, 0.1))
         assert mat.shape[0] == mat.shape[1]
 
 
@@ -68,24 +72,39 @@ class TestStationaryDistribution(unittest.TestCase):
         def out_of_bounds(df):
             return (df['x'] < 0) | (df['x'] >= 1024)
 
-        pairs, _ = extract_pairs(rw.f(), 10, 0, out_of_bounds=out_of_bounds)
+        pairs, _ = extract_pairs(rw.f(), 10, 0, out_of_bounds=out_of_bounds,
+                                 pos_columns=['x'])
         bins, mat, counts = transition_matrix(pairs['s0'].values,
                                               pairs['s1'].values,
                                               bins=np.arange(0, 10.1, 0.1),
-                                              norm='2d')
+                                              norm='radial_2d')
 
         distr = stationary(mat)
 
-        # mask = (distr_std / distr) < REL_STD_CUTOFF
-        # distr = distr[mask]
-        # bins = bins[mask]
-
-        import matplotlib.pyplot as plt
-        plt.plot(distr)
-        plt.show()
+        centers = (bins[1:] + bins[:-1]) / 2
         assert np.std(distr)/np.mean(distr) < 0.1
-        slope, intercept = np.polyfit(bins, distr, 1)
-        assert slope * max(bins) / intercept < 0.05
+        slope, intercept = np.polyfit(centers, distr, 1)
+        assert slope * max(centers) / intercept < 0.05
+
+    def test_flat_1d_lagt2(self):
+        rw = RandomWalker(100, 1000, 1, (1024,))
+
+        def out_of_bounds(df):
+            return (df['x'] < 0) | (df['x'] >= 1024)
+
+        pairs, _ = extract_pairs(rw.f(), 10, 0, out_of_bounds=out_of_bounds,
+                                 pos_columns=['x'], lagt=2)
+        bins, mat, counts = transition_matrix(pairs['s0'].values,
+                                              pairs['s1'].values,
+                                              bins=np.arange(0, 10.1, 0.1),
+                                              norm='radial_2d')
+
+        distr = stationary(mat)
+
+        centers = (bins[1:] + bins[:-1]) / 2
+        assert np.std(distr) / np.mean(distr) < 0.1
+        slope, intercept = np.polyfit(centers, distr, 1)
+        assert slope * max(centers) / intercept < 0.05
 
 
     def test_flat_2d(self):
@@ -98,37 +117,12 @@ class TestStationaryDistribution(unittest.TestCase):
         bins, mat, counts = transition_matrix(pairs['s0'].values,
                                               pairs['s1'].values,
                                               bins=np.arange(1, 5.1, 0.1),
-                                              transform='radial_2d')
+                                              jacobian='radial_2d')
 
         distr = stationary(mat)
 
-        # mask = (distr_std / distr) < REL_STD_CUTOFF
-        # distr = distr[mask]
-        # bins = bins[mask]
-
-        import matplotlib.pyplot as plt
-        plt.plot(distr, marker='o')
-        plt.ylim([0, 1.2*np.max(distr)])
-        plt.show()
+        centers = (bins[1:] + bins[:-1]) / 2
         assert np.std(distr)/np.mean(distr) < 0.1
-        slope, intercept = np.polyfit(bins, distr, 1)
-        assert slope * max(bins) / intercept < 0.05
+        slope, intercept = np.polyfit(centers, distr, 1)
+        assert slope * max(centers) / intercept < 0.05
 
-
-    def test_distr_lagt2(self):
-        rw = RandomWalker(100, 1000, 1, (64, 64))
-
-        def out_of_bounds(df):
-            return (df['x'] < 0) | (df['x'] >= 64) | (df['y'] < 0) | (df['y'] > 64)
-
-        pairs, _ = extract_pairs(rw.f(), 10, 0, out_of_bounds=out_of_bounds,
-                                 lagt=2)
-        bins, mat, counts = transition_matrix(pairs, 0, 10, 0.1, norm='2d')
-        distr = stationary(mat)
-
-        distr = distr[5:]
-        bins = bins[5:]
-
-        assert np.std(distr)/np.mean(distr) < 0.1
-        slope, intercept = np.polyfit(bins, distr, 1)
-        assert slope * max(bins) / intercept < 0.05
