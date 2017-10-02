@@ -1,5 +1,6 @@
 trackpy-force
 =============
+[![build status](https://travis-ci.org/caspervdw/trackpy-force.png?branch=master)](https://travis-ci.org/caspervdw/trackpy-force)
 
 Extract forces from trajectories of Brownian particles
 
