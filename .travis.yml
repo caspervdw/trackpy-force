@@ -4,7 +4,7 @@ sudo: false
 matrix:
   include:
     - python: "2.7"
-      env: DEPS="numpy=1.9 scipy=0.16 pandas=0.16 trackpy emcee"
+      env: DEPS="libgfortran=1.0 numpy=1.9 scipy=0.16 pandas=0.16 trackpy emcee"
     - python: "3.6"
       env: DEPS="numpy scipy pandas trackpy emcee"
 
