@@ -151,7 +151,10 @@ class MLEBase(with_metaclass(ABCMeta, object)):
 
     def sample_bayesian(self, p0=None, nwalkers=None, est_alpha=0.1, nburn=100,
                         nsteps=200):
-        import emcee
+        try:
+            import emcee
+        except ImportError:
+            raise ImportError('The package "emcee" is required for Bayesian sampling')
         if p0 is None:
             p0 = self.fit(p0=None, detail=False)
         if nwalkers is None:
